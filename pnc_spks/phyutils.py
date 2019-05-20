@@ -1,23 +1,125 @@
 import pandas as pd
 import os
 import numpy as np
+from os.path import join as pjoin
+from glob import glob
+from .io import *
 
-def get_cluster_groups(sortfolder,verbose = False):
+def read_phy_data(sortfolder,srate = 30000,bin_file=None):
+    ''' 
+    Read the spike times saved as phy format.
+    Does not use template data.
+    Computes mean waveforms from the binary file for cluster depth.
+    TODO: Add waveform stats and unit depths.
+    '''
+    keys = ['spike_times',
+            'spike_clusters']
+    tmp = dict() 
+    def read_npy(key):
+        res = None
+        if os.path.isfile(pjoin(sortfolder,key+'.npy')):
+            res = np.load(pjoin(sortfolder,key+'.npy'))
+        return res
+    for k in keys:
+        tmp[k] = read_npy(k)
+    sp = tmp['spike_times']
+    clu = tmp['spike_clusters']
+    uclu = np.unique(clu)
+    cgroupsfile = pjoin(sortfolder,'cluster_groups.csv')
+    if not os.path.isfile(cgroupsfile):
+        cgroupsfile = pjoin(sortfolder,'cluster_KSLabel.tsv')
+    cgroups = pd.read_csv(cgroupsfile,sep='\t',
+                          names = ['cluster_id','label'],
+                         header = 0)
+    spks = [(u,
+             cgroups[cgroups.cluster_id == u].label.iloc[0],
+             sp[clu == u]/srate) for u in uclu]
+    res = pd.DataFrame(spks,columns = ['cluster_id',
+                                        'cluster_label',
+                                        'ts'])
+    if not bin_file is None:
+        print('Reading mean waveforms from the binary file.')
+        assert os.path.isfile(bin_file), 'File {0} not found.'.format(bin_file)
+        mwaves = par_get_mean_waveforms(bin_file,[s[2] for s in spks])
+        chmap = read_phy_channelmap(sortfolder)
+        # discard unused channels
+        mwaves = mwaves[:,:,np.array(chmap.ichan)]
+        res['mean_waveforms'] = [m for m in mwaves]
+    return res
+
+
+def read_phy_channelmap(sortfolder):
+    ''' 
+    
+    chmap = read_phy_channelmap(sortfolder)
+    
+    Reads channelmap from phy (template-gui).
+
+    Needed files: channel_map.npy, channel_positions.npy
+    '''
+    fname = pjoin(sortfolder,'channel_map.npy')
+    assert os.path.isfile(fname),'Could not find {0}'.format(fname)
+    chidx = np.load(pjoin(sortfolder,fname))
+    fname = pjoin(sortfolder,'channel_positions.npy')
+    assert os.path.isfile(fname),'Could not find {0}'.format(fname)
+    channel_positions = np.load(pjoin(sortfolder,fname))
+    chx = [x[0] for x in channel_positions]
+    chy = [x[1] for x in channel_positions]
+    return pd.DataFrame(zip(chidx.flatten(),chx,chy),columns = ['ichan','x','y'])
+
+vars = {}
+def _init_spikeglx_bin(bin_file):
+    vars['dat'],vars['meta'] = load_spikeglx_binary(bin_file)
+    vars['srate'] = vars['meta']['imSampRate']
+def _work_mwaves(ts,chmap = None):
+    if chmap is None:
+        chmap = np.arange(vars['dat'].shape[1])
+    res = get_random_waveforms(
+        vars['dat'],
+        chmap,
+        (ts*vars['srate']).astype(int),
+        nwaves=100,
+        npre=30,
+        npost=30,
+        dofilter=True)
+    return res.mean(axis=0)
+def par_get_mean_waveforms(bin_file,ts):
+    '''
+    mwaves = par_get_mean_waveforms(bin_file,ts)
+    Gets the mean waveforms from a binary file given the timestamps.
+    Usage:
+    
+    '''
+    from multiprocessing import Pool,cpu_count
+    with Pool(processes=cpu_count(),
+              initializer=_init_spikeglx_bin,
+              initargs=([bin_file])) as pool:
+        res = pool.map(_work_mwaves,ts)
+    return np.stack(res)
+
+
+
+# Old/deprecated... don't look at this.
+
+def get_cluster_groups(sortfolder,verbose = False,create=False):
     df = None
     sortfolder = os.path.abspath(sortfolder)
-    for root, dirs, filenames in os.walk(sortfolder):
-        for filename in filenames:
-            if not '/.' in root:
-                if 'cluster_groups.csv' in filename:
-                    folder = root
-                    df = pd.DataFrame.from_csv(pjoin(folder,'cluster_groups.csv'),
-                                           header=0,
-                                           index_col=None,
-                                           sep='\t')
-                    if verbose:
-                        print('Loaded '+ pjoin(folder,'cluster_groups.csv'))
-
-    if df is None:
+    clustergroups = glob(pjoin(sortfolder,'cluster_groups.csv'))
+    KSlabel = glob(pjoin(sortfolder,'cluster_KSLabel.tsv'))
+    if len(clustergroups):
+        df = pd.read_csv(clustergroups[0],
+                         header=0,
+                         index_col=None,
+                         sep='\t')
+    elif len(KSlabel):
+        df = pd.read_csv(KSlabel[0],
+                         header=0,
+                         index_col=None,
+                         sep='\t')
+        if verbose:
+            print('Loaded (KS auto) '+ KSlabel[0])
+    
+    if df is None and create:
         clus = None
         for root, dirs, filenames in os.walk(sortfolder):
             for filename in filenames:
@@ -91,7 +193,6 @@ def get_units_ts(sortfolder,selection='all'):
         unit_ids = np.array(cluinfo[cluinfo.group == selection].cluster_id)
     spks = [ts[clus==i] for i in unit_ids]
     return spks,unit_ids
-
 
 
 def get_random_waveforms(data, datchannels, timestamps, nwaves = 100,

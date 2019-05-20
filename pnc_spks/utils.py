@@ -17,8 +17,6 @@ def _check_arg(x, xname):
         raise ValueError('%s must be one-dimensional.' % xname)
     return x
 
-#######################################################################################
-
 def xcorr(x, y, maxlag):
     """
     Cross correlation with a maximum number of lags.
@@ -92,3 +90,20 @@ def compute_spike_threshold(x,stdmin=4):
     Joao Couto - January 2016    
     '''
     return stdmin * np.median(np.abs(x))/0.6745;
+
+def whitening_matrix(x, fudge=1e-18):
+    """
+    wmat = whitening_matrix(dat, fudge=1e-18)
+    Compute the whitening matrix.
+        - dat is a matrix nsamples x nchannels
+    Apply using np.dot(dat,wmat)
+    Adapted from phy
+    """
+    assert x.ndim == 2
+    ns, nc = x.shape
+    x_cov = np.cov(x, rowvar=0)
+    assert x_cov.shape == (nc, nc)
+    d, v = np.linalg.eigh(x_cov)
+    d = np.diag(1. / np.sqrt(d + fudge))
+    w = np.dot(np.dot(v, d), v.T)
+    return w

@@ -12,6 +12,7 @@ import sys
 import math
 from ..io import *
 from ..probe import *
+from ..utils import *
 
 # OPENGL stuff...
 VERT_SHADER = """
@@ -52,7 +53,7 @@ Description of keyboard shorcuts:
     [R] - Reset view
     [left arrow] - move view to the left
     [right arrow] - move view to the right
-    [D] - spatial derivative
+    [W] - whiten
     [H] - highpass filter
     [M] - medial subtraction
     [K] - show keys
@@ -74,10 +75,11 @@ class BinaryViewer(app.Canvas):
         self.fd = fd
         self.srate = srate
         self.chtoplot = chtoplot
-        self.spatial_filter = False
+        self.whiten = False
         self.n = N
         self.m = len(self.chtoplot)
         self.ymean = None
+        self.whitenmat = None
         self.noffset = float(timeoffset*srate)
         print(self.n,self.m)
         self.data = np.zeros(int(self.n*self.m), dtype=[
@@ -118,12 +120,19 @@ class BinaryViewer(app.Canvas):
         x = np.tile(np.linspace(-1., 1., n), m)
         y = np.array(self.fd[int(0)+sampleoffset:n + sampleoffset,
                              self.chtoplot.astype(int)].astype(np.float32)).T
+        if self.whiten:
+            if self.whitenmat is None:
+                self.whitenmat = whitening_matrix(
+                    self.fd[:100000,
+                            self.chtoplot.astype(int)])
+            y = np.dot(y.T,self.whitenmat).T
+
         if self.ymean is None:
             self.ymean = np.repeat(np.mean(
                 y,axis=1), y.shape[1]).reshape(y.shape)
             self.ymin = np.min(y[:])
             self.ymax = np.max(y[:])
-        y -= self.ymean
+            y -= self.ymean
 
         if self.highpass:
             import scipy.signal as signal
@@ -136,9 +145,6 @@ class BinaryViewer(app.Canvas):
             ymedian = np.tile(np.median(
                 y,axis=0), (y.shape[0],1))
             y -= ymedian
-        if self.spatial_filter:
-            y[0:-2,:] = np.diff(y,2,0)
-            y[-2:,:] = np.zeros((2,y.shape[1]))
 #        y = (y-self.ymin)/self.ymax
         y +=  np.repeat(np.arange(y.shape[0]),
                         y.shape[1]).reshape(y.shape)*self.offset
@@ -242,8 +248,12 @@ class BinaryViewer(app.Canvas):
             self.program['u_pan'] = (pan_x+dx/scale_x, pan_y+dy/scale_y)
         elif event.key=='Q':
             sys.exit()
-        elif event.key=='D':
-            self.spatial_filter = not self.spatial_filter
+        elif event.key=='W':
+            self.whiten = not self.whiten
+            if self.whiten:
+                self.offset /= 5
+            else:
+                self.offset*= 5
             self.read_from_binary()
             self.dbuf.set_data(self.data)
 
