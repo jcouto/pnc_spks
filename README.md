@@ -1,6 +1,10 @@
 
 # Paris neuro course neuropixels workshop 2019
 
+## Slides
+
+[pdf here](presentation/2019_paris_npix.pdf)
+
 ## Example notebooks
 
 [Plot raw data](notebooks/example_plot_binary_data.ipynb)
