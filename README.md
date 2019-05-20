@@ -1,9 +1,10 @@
 
 # Paris neuro course neuropixels workshop 2019
 
-## Slides
+## Dataset
+Only available for [1 week](https://fil.email/UksKniKn) 
 
-[pdf here](presentation/2019_paris_npix.pdf)
+## [Slides](presentation/2019_paris_npix.pdf)
 
 ## Example notebooks
 
@@ -15,9 +16,11 @@
 
 ## Installing
 
-This is a python package, may be easier to get an Anaconda distribution.
-Dependencies: matplotlib,numpy,pandas,argparse,glob,tqdm,vispy
+This is a python package, may be easier install if you download an Anaconda Python distribution.
+
+List of dependencies: matplotlib,numpy,pandas,argparse,glob,tqdm,vispy
 
 Install:
-Download the repository and run "python setup.py develop" from the repository directory.
+
+Download the repository and run "python setup.py develop" from the repository folder.
 
