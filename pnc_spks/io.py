@@ -73,8 +73,7 @@ def read_spikeglx_meta(metafile):
                     except:
                         meta[k] = val
     # Set the sample rate depending on the recording mode
-    if meta['typeThis'] == 'imec':
-        meta['sRateHz'] = meta['imSampRate']
+    meta['sRateHz'] = meta[meta['typeThis'][:2]+'SampRate']
     return meta
 
 def load_spikeglx_binary(fname, dtype=np.int16):
