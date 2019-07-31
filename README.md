@@ -2,7 +2,7 @@
 # Paris neuro course neuropixels workshop 2019
 
 ## Dataset
-Only available for [1 week](https://fil.email/UksKniKn) 
+Only available for [1 week](https://fil.email/thjbj8Fw) 
 
 ## [Slides](presentation/2019_paris_npix.pdf)
 
