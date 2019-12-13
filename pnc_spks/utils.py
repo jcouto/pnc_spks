@@ -107,3 +107,71 @@ def whitening_matrix(x, fudge=1e-18):
     d = np.diag(1. / np.sqrt(d + fudge))
     w = np.dot(np.dot(v, d), v.T)
     return w
+
+
+def alpha_function(N, amplitude = 1, t_rise = 2, t_decay = 250, srate = 1000.,norm = True):
+
+    t_rise = t_rise/srate;
+    t_decay = t_decay/srate;
+    
+    fun_max  = (t_rise*t_decay/(t_decay-t_rise)) * np.log(t_decay-t_rise);
+    normalization_factor = 1; #%(exp(-fun_max/t_rise) - exp(-fun_max/t_decay))/(t_rise-t_decay);
+    ii = np.arange(0,N)
+    kernel = np.hstack([np.zeros(N),
+                        amplitude*(1.0/(normalization_factor*(t_decay-t_rise))) * (np.exp(-((ii/srate)/t_decay))
+                                                                                   - np.exp(-(ii/srate)/t_rise))])
+    if norm:
+        kernel /= np.sum(kernel)
+    return kernel
+
+def binary_spikes(spks,edges,sigma=None,kernel = None):
+    ''' Create a vector of binary spikes.
+
+    binsize = 0.001
+    edges = np.arange(0,5,binsize)
+    bspks = binary_spikes(spks,edges,5)/binsize
+
+    Joao Couto - March 2016
+    '''
+    bins = [np.histogram(sp,edges)[0] for sp in spks]
+    if not sigma is None:
+        # Convolve spk trains
+        x = np.arange(np.floor(-3*sigma),np.ceil(3*sigma))
+        kernel = np.exp(-(x/sigma)**2/2)/(sigma*np.sqrt(2*np.pi))
+    if not kernel is None:
+        bins = [np.convolve(a,kernel,'same') for a in bins]
+    return np.vstack(bins)
+
+from scipy.interpolate import interp2d
+from scipy.signal import ellip, filtfilt,butter
+
+def bandpass_filter(X,srate,band=[3,300]):
+    b, a = ellip(4, 0.1, 40, np.array(band)/(srate/2.),btype='bandpass')
+    return filtfilt(b, a, X,axis = 0)#, method="gust"
+
+def current_source_density(lfp,chmap, chanspacing=60, interpolate=False):
+    # Interpolate so that we get even sampling
+    selchannels = np.array(chmap.ichan)
+    ux = np.unique(chmap.x)
+    ix = np.argmax([np.sum(chmap.x==u) for u in ux])
+    chidx = chmap.x==ux[ix]
+    y = np.array(chmap[chidx].y)
+    duration = lfp.shape[1]
+    x = np.arange(duration)
+    z = lfp[chmap[chidx].ichan,:]
+    f = interp2d(x,y,z)
+    ny = np.arange(np.min(y)-chanspacing,np.max(y)+chanspacing,chanspacing)
+    nlfp = f(x,ny)
+    # duplicate outmost channels
+    csd = np.empty((nlfp.shape[0]-2,nlfp.shape[1]))
+    smoothed_lfp = np.empty_like(nlfp)
+    for i in range(csd.shape[0]):
+        smoothed_lfp[i+1,:] = (1./4.) *(nlfp[i,:] + 2.*nlfp[i+1,:] + nlfp[i+2,:])
+    smoothed_lfp[0,:] = (1./4.) *(3.*nlfp[0,:] + nlfp[1,:])
+    smoothed_lfp[-1,:] = (1./4.) *(3.*nlfp[-1,:] + nlfp[-2,:])
+    smoothed_lfp = smoothed_lfp
+    for i in range(csd.shape[0]):
+        csd[i,:] = -(1./(chanspacing*1.e-3)**2.)*(smoothed_lfp[i,:]-2.*smoothed_lfp[i+1,:]+smoothed_lfp[i+2,:])
+    f = interp2d(x,np.linspace(np.min(y)-chanspacing,np.max(y)+chanspacing,csd.shape[0]),csd)
+    ny = np.arange(np.min(y)-chanspacing,np.max(y)+chanspacing,5.)
+    return f(x,ny),smoothed_lfp[:,1:-1]

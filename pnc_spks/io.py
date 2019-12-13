@@ -97,3 +97,20 @@ def load_spikeglx_binary(fname, dtype=np.int16):
     meta = read_spikeglx_meta(metafile)
     nchans = meta['nSavedChans']
     return map_binary(fname,nchans,dtype=np.int16,mode = 'r'),meta
+
+def get_npix_lfp_triggered(dat,meta,onsets,dur,tpre=1,car_subtract = True):
+    srate = meta['imSampRate']
+    lfp = []
+    idx = np.arange(-tpre*srate,(dur + tpre)*srate,1,dtype = int)
+    from tqdm import tqdm
+    for i in tqdm(onsets):
+        tmp = dat[int(i*srate)+idx,:]
+        if car_subtract:
+            tmp = (tmp.T - np.median(tmp,axis=1)).T
+            tmp = tmp - np.median(tmp,axis=0)
+        lfp.append(tmp)
+    lfp = np.stack(lfp)
+    gain = np.float32(meta['~imroTbl'][1].split(' ')[3])
+    microv_per_bit = ((meta['imAiRangeMax'] - meta['imAiRangeMin'])/(2**16))/gain*1e6
+    lfp *= microv_per_bit
+    return lfp

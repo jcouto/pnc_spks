@@ -1,6 +1,18 @@
 import pylab as plt
 import numpy as np
 
+colors = ['#000000',
+          '#d62728',
+          '#1f77b4',
+          '#ff7f0e',
+          '#2ca02c',
+          '#9467bd',
+          '#8c564b',
+          '#e377c2',
+          '#7f7f7f',
+          '#bcbd22',
+          '#17becf']
+
 def plot_raster(spks,offset=0.0,height=1.0,colors='black',ax = None):
     ''' Plot a raster from sets of spiketrains.
             - "spks" is a list of spiketrains

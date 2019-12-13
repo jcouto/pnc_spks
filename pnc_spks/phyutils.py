@@ -27,6 +27,7 @@ def read_phy_data(sortfolder,srate = 30000,bin_file=None):
     uclu = np.unique(clu)
     cgroupsfile = pjoin(sortfolder,'cluster_groups.csv')
     if not os.path.isfile(cgroupsfile):
+        print('Labels are from KS.')
         cgroupsfile = pjoin(sortfolder,'cluster_KSLabel.tsv')
     cgroups = pd.read_csv(cgroupsfile,sep='\t',
                           names = ['cluster_id','label'],
@@ -45,6 +46,15 @@ def read_phy_data(sortfolder,srate = 30000,bin_file=None):
         # discard unused channels
         mwaves = mwaves[:,:,np.array(chmap.ichan)]
         res['mean_waveforms'] = [m for m in mwaves]
+        # peak to baseline per channel 
+        ptb = [mwave[20:50,:].max(axis=0) - mwave[20:50,:].min(axis=0)
+               for mwave in mwaves]
+        # "active" channels
+        activeidx = [np.where(np.abs((p-np.mean(p))/np.std(p))>1)[0]
+                     for p in ptb]
+        peakchan =  [chmap.ichan.iloc[np.argmax(np.abs(p))] for p in ptb]
+        res['peak_channel'] = peakchan
+        res['active_channels'] = activeidx
     return res
 
 
@@ -65,8 +75,10 @@ def read_phy_channelmap(sortfolder):
     channel_positions = np.load(pjoin(sortfolder,fname))
     chx = [x[0] for x in channel_positions]
     chy = [x[1] for x in channel_positions]
-    return pd.DataFrame(zip(chidx.flatten(),chx,chy),columns = ['ichan','x','y'])
+    return pd.DataFrame(zip(chidx.flatten(),chx,chy),
+                        columns = ['ichan','x','y'])
 
+# helper functions to get mean waveforms
 vars = {}
 def _init_spikeglx_bin(bin_file):
     vars['dat'],vars['meta'] = load_spikeglx_binary(bin_file)
@@ -82,7 +94,8 @@ def _work_mwaves(ts,chmap = None):
         npre=30,
         npost=30,
         dofilter=True)
-    return res.mean(axis=0)
+    return np.median(res,axis=0)
+
 def par_get_mean_waveforms(bin_file,ts):
     '''
     mwaves = par_get_mean_waveforms(bin_file,ts)
@@ -196,7 +209,7 @@ def get_units_ts(sortfolder,selection='all'):
 
 
 def get_random_waveforms(data, datchannels, timestamps, nwaves = 100,
-                         npre = 15,npost=25,dofilter = True):
+                         srate = 30000, npre = 15, npost=25,dofilter = True):
     '''Gets waveforms sampled randomly from a set of timestamps.'''
     spks2extract = np.random.choice(timestamps,
                           np.clip(nwaves,
@@ -209,11 +222,11 @@ def get_random_waveforms(data, datchannels, timestamps, nwaves = 100,
         waveforms[i,:,:] = np.take(data[indexes+s,:].astype(np.float32),datchannels,axis=1)
     if dofilter:
         from scipy import signal
-        b,a = signal.butter(3,(500 / (25000. / 2.), 5000 / (25000 / 2.)),'pass')
+        b,a = signal.butter(3,(500 / (srate / 2.), 5000 / (srate / 2.)),'pass')
         waveforms = signal.filtfilt(b,a,waveforms,axis = 1)
     return waveforms
 
-def get_mean_waveforms(data,datchannels,spks,nwaves = 100,npre = 15,npost=25):
+
     waves = []
     from tqdm import tqdm
     for i,sp in tqdm(enumerate(spks)):
