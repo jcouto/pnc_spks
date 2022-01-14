@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from os.path import join as pjoin
 
 def map_binary(fname,nchannels,dtype=np.int16,
                offset = 0,
@@ -114,3 +115,59 @@ def get_npix_lfp_triggered(dat,meta,onsets,dur,tpre=1,car_subtract = True):
     microv_per_bit = ((meta['imAiRangeMax'] - meta['imAiRangeMin'])/(2**16))/gain*1e6
     lfp *= microv_per_bit
     return lfp
+
+
+def concatenate_binary_files(files,output_file, fix_metadata = True):
+    '''
+    Concatenate binary files. Fixes spikeGLX metadata
+    '''
+    from tqdm import tqdm
+    import aiofiles
+
+    dat = []
+    metadata = []
+    files = natsorted(files)
+    for f in files:
+        data, meta = load_spikeglx_binary(f)
+        dat.append(data)
+        metadata.append(meta)
+    fileSizeBytes = [m['fileSizeBytes'] for m in metadata]
+    fileTimeSecs = [m['fileTimeSecs'] for m in metadata]
+    # concatenate the binary file, this takes some time
+    # write the files
+    chunksize = 10*4096 
+    pbar = tqdm(total = np.sum(fileSizeBytes))
+    async with aiofiles.open(output_file, 'wb') as outf:
+        for file,size in zip(files,fileSizeBytes):
+            current_pos = 0
+            pbar.set_description(os.path.basename(file))
+            async with aiofiles.open(file, mode='rb') as f:
+                while not current_pos == size:
+                    if current_pos + chunksize < size:
+                        chunk = chunksize
+                    else:
+                        chunk = int(size - current_pos)
+                    contents = await f.read(chunk)
+                    await outf.write(contents)
+                    current_pos += chunk
+                    pbar.update(chunk)
+    if fix_metadata:
+        pbar.set_description('Done, writing metadata.')
+        outmeta = output_file.replace('bin','meta')
+        with open(files[0].replace('.bin','.meta')) as file:
+            lines = [line.rstrip() for line in file.readlines()]
+        for i,line in enumerate(lines):
+            if line.startswith('fileSizeBytes'):
+                lines[i] = 'fileSizeBytes={0:d}'.format(int(np.sum(fileSizeBytes)))
+            if line.startswith('fileTimeSecs'):
+                lines[i] = 'fileTimeSecs={0:f}'.format(np.sum(fileTimeSecs))
+        lines.append('concatenatedFiles='+' '.join(
+            [os.path.basename(f) for f in files]))
+        lines.append('concatenatedFilesOffsetBytes='+' '.join(
+            [str(int(b)) for b in fileSizeBytes]))
+        lines.append('concatenatedFilesOffsetTimeSecs='+' '.join(
+            [str(b) for b in fileTimeSecs]))
+        with open(outmeta,'w') as file:
+            for line in lines:
+                file.write(line + '\n')
+    pbar.close()    
