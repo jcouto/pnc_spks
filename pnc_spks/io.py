@@ -1,6 +1,8 @@
 import os
 import numpy as np
 from os.path import join as pjoin
+from tqdm import tqdm
+from natsort import natsorted
 
 def map_binary(fname,nchannels,dtype=np.int16,
                offset = 0,
@@ -118,11 +120,6 @@ def get_npix_lfp_triggered(dat,meta,onsets,dur,tpre=1,car_subtract = True):
 
 
 def concatenate_binary_files(files,output_file, fix_metadata = True):
-    '''
-    Concatenate binary files. Fixes spikeGLX metadata
-    '''
-    from tqdm import tqdm
-    import aiofiles
 
     dat = []
     metadata = []
@@ -137,18 +134,18 @@ def concatenate_binary_files(files,output_file, fix_metadata = True):
     # write the files
     chunksize = 10*4096 
     pbar = tqdm(total = np.sum(fileSizeBytes))
-    async with aiofiles.open(output_file, 'wb') as outf:
+    with open(output_file, 'wb') as outf:
         for file,size in zip(files,fileSizeBytes):
             current_pos = 0
             pbar.set_description(os.path.basename(file))
-            async with aiofiles.open(file, mode='rb') as f:
+            with open(file, mode='rb') as f:
                 while not current_pos == size:
                     if current_pos + chunksize < size:
                         chunk = chunksize
                     else:
                         chunk = int(size - current_pos)
-                    contents = await f.read(chunk)
-                    await outf.write(contents)
+                    contents = f.read(chunk)
+                    outf.write(contents)
                     current_pos += chunk
                     pbar.update(chunk)
     if fix_metadata:
@@ -164,10 +161,10 @@ def concatenate_binary_files(files,output_file, fix_metadata = True):
         lines.append('concatenatedFiles='+' '.join(
             [os.path.basename(f) for f in files]))
         lines.append('concatenatedFilesOffsetBytes='+' '.join(
-            [str(int(b)) for b in fileSizeBytes]))
+            [str(int(b)) for b in np.cumsum(fileSizeBytes)]))
         lines.append('concatenatedFilesOffsetTimeSecs='+' '.join(
-            [str(b) for b in fileTimeSecs]))
+            [str(b) for b in np.cumsum(fileTimeSecs)]))
         with open(outmeta,'w') as file:
             for line in lines:
                 file.write(line + '\n')
-    pbar.close()    
+
