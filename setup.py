@@ -21,6 +21,7 @@ setup(
     entry_points = {
       'console_scripts': [
         'plot-bin = pnc_spks.scripts.plot_binary:main',
+        'concat-bin = pnc_spks.scripts.concatenate_files:main',
       ]
     }
 )
