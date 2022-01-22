@@ -8,7 +8,6 @@ import numpy as np
 from glob import glob
 from os.path import join as pjoin
 from natsort import natsorted
-import aiofiles
 import numpy as np
 import shutil
 from pnc_spks import load_spikeglx_binary
