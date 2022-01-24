@@ -1,7 +1,7 @@
 from ..io import *
 from natsort import natsorted
 from glob import glob
-
+import sys
 import numpy as np
 
 
@@ -59,7 +59,7 @@ def main():
     for folder in folders:
         files.extend(glob(pjoin(folder,'*','*'+file_type)))
     if len(files):
-        files = nat_sorted(files)
+        files = natsorted(files)
     else:
         sys.exit()
 
