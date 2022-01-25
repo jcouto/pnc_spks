@@ -39,31 +39,27 @@ def main():
                         action='store',
                         help='output filename',
                         type=str,required=True)
-    parser.add_argument('-t','--type',
-                        action='store',
-                        help='file type to concatenate',
-                        type=str,default = '.ap.bin',required=False)
-
     opts = parser.parse_args()
 
     print(opts)
     # careful with the star in the end
     folders = opts.sessions
-    file_type = opts.type
+    file_type = ['.ap.bin','.lf.bin']
     output_file = os.path.abspath(opts.output)
     fix_metadata = not opts.no_metadata 
-    
-    
-    files = []
-    for folder in folders:
-        files.extend(glob(pjoin(folder,'*','*'+file_type)))
-    if len(files):
-        files = natsorted(files)
-    else:
-        sys.exit()
 
-    if not os.path.exists(os.path.dirname(output_file)):
-        print('Creating {0}'.format(os.path.dirname(output_file)))
-        os.makedirs(os.path.dirname(output_file))
-        
-    concatenate_binary_files(files, output_file, fix_metadata = fix_metadata)    
+    for fp in file_type:
+        files = []
+        for folder in folders:
+            files.extend(glob(pjoin(folder,'*','*'+fp)))
+        if len(files):
+            files = natsorted(files)
+        else:
+            print('Files not found in {0}'.format(folders))
+            sys.exit()
+
+        if not os.path.exists(os.path.dirname(output_file)):
+            print('Creating {0}'.format(os.path.dirname(output_file)))
+            os.makedirs(os.path.dirname(output_file))
+        concatenate_binary_files(files, output_file + fp,
+                                 fix_metadata = fix_metadata)    
