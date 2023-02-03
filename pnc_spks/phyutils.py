@@ -25,26 +25,27 @@ def read_phy_data(sortfolder,srate = 30000,bin_file=None):
     sp = tmp['spike_times']
     clu = tmp['spike_clusters']
     uclu = np.unique(clu)
-    cgroupsfile = pjoin(sortfolder,'cluster_groups.csv')
+    
+    cgroupsfile = pjoin(sortfolder,'cluster_info.tsv')
     if not os.path.isfile(cgroupsfile):
         print('Labels are from KS.')
         cgroupsfile = pjoin(sortfolder,'cluster_KSLabel.tsv')
-    cgroups = pd.read_csv(cgroupsfile,sep='\t',
-                          names = ['cluster_id','label'],
-                         header = 0)
-    spks = [(u,
-             cgroups[cgroups.cluster_id == u].label.iloc[0],
-             sp[clu == u]/srate) for u in uclu]
-    res = pd.DataFrame(spks,columns = ['cluster_id',
-                                        'cluster_label',
-                                        'ts'])
+    res = pd.read_csv(cgroupsfile,sep='\t',header = 0)
+    spks = [(sp[clu == u]/srate).flatten() for u in uclu]
+    res['ts'] = spks
+
     if not bin_file is None:
         print('Reading mean waveforms from the binary file.')
         assert os.path.isfile(bin_file), 'File {0} not found.'.format(bin_file)
-        mwaves = par_get_mean_waveforms(bin_file,[s[2] for s in spks])
-        chmap = read_phy_channelmap(sortfolder)
+        mwaves = par_get_mean_waveforms(bin_file,spks)
+        if '.ap.bin' in bin_file:
+            meta = read_spikeglx_meta(bin_file.replace('.bin','.meta'))
+            chmap = pd.DataFrame(np.vstack([meta['channel_idx'].astype(int),meta['coords'].T]).T,
+                                 columns = ['ichan','x','y'])
+        else:
+            chmap = read_phy_channelmap(sortfolder)
         # discard unused channels
-        mwaves = mwaves[:,:,np.array(chmap.ichan)]
+        mwaves = mwaves[:,:,np.array(chmap.ichan,dtype=int)]
         res['mean_waveforms'] = [m for m in mwaves]
         # peak to baseline per channel 
         ptb = [mwave[20:50,:].max(axis=0) - mwave[20:50,:].min(axis=0)
@@ -83,10 +84,11 @@ vars = {}
 def _init_spikeglx_bin(bin_file):
     vars['dat'],vars['meta'] = load_spikeglx_binary(bin_file)
     vars['srate'] = vars['meta']['imSampRate']
+
 def _work_mwaves(ts,chmap = None):
     if chmap is None:
         chmap = np.arange(vars['dat'].shape[1])
-    res = get_random_waveforms(
+    res = get_waveforms(
         vars['dat'],
         chmap,
         (ts*vars['srate']).astype(int),
@@ -208,13 +210,17 @@ def get_units_ts(sortfolder,selection='all'):
     return spks,unit_ids
 
 
-def get_random_waveforms(data, datchannels, timestamps, nwaves = 100,
-                         srate = 30000, npre = 15, npost=25,dofilter = True):
+def get_waveforms(data, datchannels, timestamps, nwaves = 100,
+                  srate = 30000, npre = 15, npost=25, random_sample = True,
+                  dofilter = True, docar = True):
     '''Gets waveforms sampled randomly from a set of timestamps.'''
-    spks2extract = np.random.choice(timestamps,
-                          np.clip(nwaves,
-                                  1,len(timestamps)),
-                          replace=False)
+    if random_sample:
+        spks2extract = np.random.choice(timestamps,
+                                        np.clip(nwaves,
+                                                1,len(timestamps)),
+                                        replace=False)
+    else:
+        spks2extract = timestamps.flatten()
     indexes = np.arange(-npre,npost,dtype=np.int32)
     waveforms = np.zeros((len(spks2extract),npre+npost,len(datchannels)),
                          dtype=np.float32)
@@ -224,16 +230,9 @@ def get_random_waveforms(data, datchannels, timestamps, nwaves = 100,
         from scipy import signal
         b,a = signal.butter(3,(500 / (srate / 2.), 5000 / (srate / 2.)),'pass')
         waveforms = signal.filtfilt(b,a,waveforms,axis = 1)
+    if docar:
+        waveforms = (waveforms.T - np.median(waveforms,axis=2).T).T
     return waveforms
 
 
-    waves = []
-    from tqdm import tqdm
-    for i,sp in tqdm(enumerate(spks)):
-        waves.append(np.mean(get_random_waveforms(data, datchannels,
-                                          sp.flatten(),
-                                          nwaves = nwaves,
-                                          npre = npre,
-                                          npost=npost),axis=0))
-    return np.array(waves)
 

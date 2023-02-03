@@ -11,6 +11,8 @@ events = unpack_npix3a_sync(trigger_data_channel)
     Outputs
         events        : dictionary of events. the keys are the channel number, the items the sample times of the events.
 
+    Joao Couto - April 2019
+
     Usage:
 Load and get trigger times in seconds:
     dat,meta = load_spikeglx('test3a.imec.lf.bin')

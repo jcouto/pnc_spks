@@ -13,7 +13,7 @@ colors = ['#000000',
           '#bcbd22',
           '#17becf']
 
-def plot_raster(spks,offset=0.0,height=1.0,colors='black',ax = None):
+def plot_raster(spks,offset=0.0,height=1.0,colors='black',ax = None,**kwargs):
     ''' Plot a raster from sets of spiketrains.
             - "spks" is a list of spiketrains
             - "colors" can be an array of colors
@@ -27,7 +27,7 @@ def plot_raster(spks,offset=0.0,height=1.0,colors='black',ax = None):
     for i,(sp,cc) in enumerate(zip(spks,colors)):
         ax.vlines(sp,offset+(i*height),
                   offset+((i+1)*height),
-                  colors=cc)
+                  colors=cc,**kwargs)
 
 
 def plot_multichannel_data(dat, chorder, srate = 30000.,
