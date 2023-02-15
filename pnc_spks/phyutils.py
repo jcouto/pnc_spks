@@ -31,10 +31,12 @@ def read_phy_data(sortfolder,srate = 30000,bin_file=None):
         print('Labels are from KS.')
         cgroupsfile = pjoin(sortfolder,'cluster_KSLabel.tsv')
     res = pd.read_csv(cgroupsfile,sep='\t',header = 0)
-    spks = [(sp[clu == u]/srate).flatten() for u in uclu]
-    res['ts'] = spks
+    
+    if bin_file is None:
+        spks = [(sp[clu == u]/srate).flatten() for u in uclu]
+        res['ts'] = spks
 
-    if not bin_file is None:
+    else:
         print('Reading mean waveforms from the binary file.')
         assert os.path.isfile(bin_file), 'File {0} not found.'.format(bin_file)
         mwaves = par_get_mean_waveforms(bin_file,spks)
@@ -44,6 +46,11 @@ def read_phy_data(sortfolder,srate = 30000,bin_file=None):
                                  columns = ['ichan','x','y'])
         else:
             chmap = read_phy_channelmap(sortfolder)
+
+        print('Computing spike times with sRate from meta file. srate argument will be ignored if it was passed!')
+        spks = [(sp[clu == u]/meta['sRateHz']).flatten() for u in uclu]
+        res['ts'] = spks
+
         # discard unused channels
         mwaves = mwaves[:,:,np.array(chmap.ichan,dtype=int)]
         res['mean_waveforms'] = [m for m in mwaves]
