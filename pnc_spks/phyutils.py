@@ -26,14 +26,14 @@ def read_phy_data(sortfolder,srate = 30000,bin_file=None):
     clu = tmp['spike_clusters']
     uclu = np.unique(clu)
     
-    cgroupsfile = pjoin(sortfolder,'cluster_info.tsv')
+    cgroupsfile = pjoin(sortfolder,'cluster_group.tsv')
     if not os.path.isfile(cgroupsfile):
         print('Labels are from KS.')
         cgroupsfile = pjoin(sortfolder,'cluster_KSLabel.tsv')
     res = pd.read_csv(cgroupsfile,sep='\t',header = 0)
     
     if bin_file is None:
-        spks = [(sp[clu == u]/srate).flatten() for u in uclu]
+        spks = [(sp[clu == u]/srate).flatten() for u in res.cluster_id.values]
         res['ts'] = spks
 
     else:
@@ -47,7 +47,7 @@ def read_phy_data(sortfolder,srate = 30000,bin_file=None):
             chmap = read_phy_channelmap(sortfolder)
 
         print('Computing spike times with sRate from meta file. srate argument will be ignored if it was passed!')
-        spks = [(sp[clu == u]/meta['sRateHz']).flatten() for u in uclu]
+        spks = [(sp[clu == u]/meta['sRateHz']).flatten() for u in res.cluster_id.values]
         res['ts'] = spks
         mwaves = par_get_mean_waveforms(bin_file,spks)
 
@@ -64,7 +64,6 @@ def read_phy_data(sortfolder,srate = 30000,bin_file=None):
         res['peak_channel'] = peakchan
         res['active_channels'] = activeidx
     return res
-
 
 def read_phy_channelmap(sortfolder):
     ''' 
